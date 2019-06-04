@@ -97,7 +97,7 @@ def check_hosts(ips):
         a continuous scan with as little effort from my end as possible.
     """
     processes = Settings.get("processes")
-    print(processes)
+
     start_time = time()
     pool = Pool(processes)
     output = pool.map(ping, ips)

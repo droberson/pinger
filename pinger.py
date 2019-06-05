@@ -317,6 +317,7 @@ def parse_args():
         exit(os.EX_USAGE)
 
     # Create list of IPs to scan.
+    # TODO nmap style IP addresses too: 192.168.0-10.*
     hosts = set()
     for host in args.hosts:
         if "/" in host:

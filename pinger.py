@@ -14,6 +14,8 @@ from multiprocessing import Pool
 from twisted.web import server, resource
 from twisted.internet import reactor
 
+from rollinglog.rollinglog import RollingLog
+
 
 class Settings(object):
     """Settings object - store application settings and methods to
@@ -39,29 +41,6 @@ class Settings(object):
     def get(name):
         return Settings.__config[name]
 
-# TODO load log from disk
-class RollingLog():
-    """RollingLog class - Keep a sized, first in, first out log.
-
-    Attributes:
-        size (int) - number of log entries to kee ptrack of
-    """
-    def __init__(self, size):
-        self.size = size
-        self.log = []
-
-    def add(self, data):
-        self.log += [data]
-        if len(self.log) > self.size:
-            self.log = self.log[-1 * self.size:]
-
-    def write(self, path):
-        with open(path, "w") as logfile:
-            for line in self.log:
-                logfile.write(str(line) + "\n")
-
-    def clear(self):
-        self.log = []
 
 LOG = RollingLog(Settings.get("logsize"))
 

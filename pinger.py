@@ -153,6 +153,10 @@ def check_hosts(ips):
     reactor.callInThread(check_hosts, ips)
 
 
+def http_log(request):
+    # TODO this
+    print(request.method, request.uri, request.path, request.args, request.requestHeaders)
+
 class PingerAPIHelp(Resource):
     """PingerAPIHelp() - Display API help."""
     @staticmethod
@@ -160,11 +164,13 @@ class PingerAPIHelp(Resource):
         """Process GET request.
 
         Args:
-            request (twisted Request object) - Required, but not used.
+            request (twisted Request object)
 
         Returns:
             String containing HTML of the help menu.
         """
+        http_log(request)
+
         output = """\
         <html>
         <head><title>Pinger</title></head>
@@ -189,11 +195,12 @@ class PingerAPIElapsed(Resource):
         """Process GET request.
 
         Args:
-            request (twisted Request object) - required, but not used.
+            request (twisted Request object)
 
         Returns:
             JSON string containing "elapsed": <seconds>
         """
+        http_log(request)
         elapsed = {"elapsed": 0}
         elapsed["elapsed"] = sum(entry[0] for entry in LOG.log if entry[0])
         return json.dumps(elapsed).encode("utf-8")
@@ -206,11 +213,13 @@ class PingerAPICheck(Resource):
         """Process GET request.
 
         Args:
-            request (twisted Request object) - Contains args, cookies, etc.
+            request (twisted Request object)
 
         Returns:
             JSON string containing information about the host
         """
+        http_log(request)
+
         check = {}
         try:
             host = request.args[b"host"]
@@ -251,12 +260,14 @@ class PingerAPIUp(Resource):
         """Process GET request.
 
         Args:
-            request (twisted Request object) - Unused, but requried.
+            request (twisted Request object)
 
         Returns:
             JSON object of a list of currently alive hosts and their last
             reported latency.
         """
+        http_log(request)
+
         alive = {}
         for host in LOG.log[-1][1]:
             if host[1]:
@@ -271,11 +282,12 @@ class PingerAPIDown(Resource):
         """Process GET request
 
         Args:
-            request (twisted Request object) - required, unused.
+            request (twisted Request object)
 
         Returns:
             JSON list of tracked, but down hosts.
         """
+        http_log(request)
         dead = [host[0] for host in LOG.log[-1][1] if host[1] is None]
         return json.dumps(dead).encode("utf-8")
 
@@ -287,7 +299,7 @@ class PingerAPIStats(Resource):
         """Process GET request
 
         Args:
-            request (twisted Request object) - required, unused.
+            request (twisted Request object)
 
         Returns:
             JSON string showing stats of currently tracked hosts.
@@ -295,6 +307,8 @@ class PingerAPIStats(Resource):
         Example output:
             {"192.168.1.1": 100.0, "192.168.1.2": 0.0, "elapsed": 31.124125}
         """
+        http_log(request)
+
         elapsed = 0
         stats = {}
         for log_entry in LOG.log:

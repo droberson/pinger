@@ -16,6 +16,7 @@ from multiprocessing import Pool
 from textwrap import dedent
 
 from twisted.web import server, resource
+from twisted.web.resource import Resource
 from twisted.internet import reactor
 
 from rollinglog.rollinglog import RollingLog
@@ -150,125 +151,118 @@ def check_hosts(ips):
     reactor.callInThread(check_hosts, ips)
 
 
-class PingerAPI(resource.Resource):
-    """PingerAPI class - twisted resource to handle API requests"""
-    isLeaf = True
-
+class PingerAPI_help(Resource):
     @staticmethod
     def render_GET(request):
-        """PingerAPI.render_GET() - Handle GETs on HTTP API.
-
-        Args:
-            request - Twisted request object
-
-        Returns:
-            JSON or HTML output based on the GET request and data available.
+        # display help
+        output = """\
+        <html>
+        <head><title>Pinger</title></head>
+        <body>
+        <h1>Pinger</h1>
+        <h2>Available API calls</h2>
+        <p>/elapsed - provide timeframe for scan results</p>
+        <p>/up - show current alive hosts and latency</p>
+        <p>/down - show current down hosts</p>
+        <p>/stats - show up statistics</p>
+        <p>/check/host=ip - give current status of ip</p>
+        </body>
+        </html>
         """
-        #print(request.requestHeaders)
-        if request.uri == b"/":
-            # display help
-            output = """\
-            <html>
-            <head><title>Pinger</title></head>
-            <body>
-            <h1>Pinger</h1>
-            <h2>Available API calls</h2>
-            <p>/elapsed - provide timeframe for scan results</p>
-            <p>/up - show current alive hosts and latency</p>
-            <p>/down - show current down hosts</p>
-            <p>/stats - show up statistics</p>
-            <p>/check/host=ip - give current status of ip</p>
-            </body>
-            </html>
-            """
-            return dedent(output).encode("utf-8")
+        return dedent(output).encode("utf-8")
 
-        if request.path == b"/elapsed":
-            # Show how much time in seconds that our log represents
-            elapsed = {"elapsed": 0}
-            elapsed["elapsed"] = sum(entry[0] for entry in LOG.log if entry[0])
-            return json.dumps(elapsed).encode("utf-8")
+class PingerAPI_elapsed(Resource):
+    #isLeaf = True
+    @staticmethod
+    def render_GET(request):
+        elapsed = {"elapsed": 0}
+        elapsed["elapsed"] = sum(entry[0] for entry in LOG.log if entry[0])
+        return json.dumps(elapsed).encode("utf-8")
 
-        if request.path == b"/check":
-            # Show details for a host
-            check = {}
-            try:
-                host = request.args[b"host"]
-                check["host"] = host[0].decode()
-            except KeyError:
-                return b"{}"
+class PingerAPI_check(Resource):
+    @staticmethod
+    def render_GET(request):
+        # Show details for a host
+        check = {}
+        try:
+            host = request.args[b"host"]
+            check["host"] = host[0].decode()
+        except KeyError:
+            return b"{}"
 
-            # Search for host in log. Bail out if a match isnt found
-            found = False
-            for entry in LOG.log[-1][1]:
-                if entry[0] == host[0].decode():
-                    check["alive"] = True if entry[1] else False
-                    found = True
-                    break
-            if found is False:
-                return b"{}"
+        # Search for host in log. Bail out if a match isnt found
+        found = False
+        for entry in LOG.log[-1][1]:
+            if entry[0] == host[0].decode():
+                check["alive"] = True if entry[1] else False
+                found = True
+                break
+        if found is False:
+            return b"{}"
 
-            # Calculate average uptime.
-            elapsed = 0
-            uptime = 0
-            for log_entry in LOG.log:
-                if log_entry[0] is None:
-                    continue
-                elapsed += log_entry[0]
-                for item in log_entry[1]:
-                    if item[0] == host[0].decode() and item[1]:
-                        uptime += log_entry[0]
+        # Calculate average uptime.
+        elapsed = 0
+        uptime = 0
+        for log_entry in LOG.log:
+            if log_entry[0] is None:
+                continue
+            elapsed += log_entry[0]
+            for item in log_entry[1]:
+                if item[0] == host[0].decode() and item[1]:
+                    uptime += log_entry[0]
 
-            check["uptime_percent"] = (uptime / elapsed) * 100
-            check["elapsed"] = elapsed
-            return json.dumps(check).encode("utf-8")
+        check["uptime_percent"] = (uptime / elapsed) * 100
+        check["elapsed"] = elapsed
+        return json.dumps(check).encode("utf-8")
 
-        if request.path == b"/up":
-            # Show current hosts responding to pings w/ latency
-            alive = {}
-            for host in LOG.log[-1][1]:
+class PingerAPI_up(Resource):
+    @staticmethod
+    def render_GET(request):
+        # Show current hosts responding to pings w/ latency
+        alive = {}
+        for host in LOG.log[-1][1]:
+            if host[1]:
+                alive[host[0]] = host[1]
+        return json.dumps(alive).encode("utf-8")
+
+class PingerAPI_down(Resource):
+    @staticmethod
+    def render_GET(request):
+        dead = [host[0] for host in LOG.log[-1][1] if host[1] is None]
+        return json.dumps(dead).encode("utf-8")
+
+class PingerAPI_stats(Resource):
+    @staticmethod
+    def render_GET(request):
+        # Show percentage of elapsed time from the log that hosts are up.
+        # Example output:
+        # {"192.168.1.1": 100.0, "192.168.1.2": 0.0, "elapsed": 31.124125}
+        elapsed = 0
+        stats = {}
+        for log_entry in LOG.log:
+            if log_entry[0] is None:
+                continue
+
+            elapsed += log_entry[0]
+            for host in log_entry[1]:
                 if host[1]:
-                    alive[host[0]] = host[1]
-            return json.dumps(alive).encode("utf-8")
+                    try:
+                        stats[host[0]] += log_entry[0]
+                    except KeyError:
+                        stats[host[0]] = log_entry[0]
+                else:
+                    try:
+                        stats[host[0]] += 0
+                    except KeyError:
+                        stats[host[0]] = 0
 
-        if request.path == b"/down":
-            # Show current down hosts
-            dead = [host[0] for host in LOG.log[-1][1] if host[1] is None]
-            return json.dumps(dead).encode("utf-8")
+        # Calculate percentage uptime for each host
+        for host in stats:
+            stats[host] = (stats[host] / elapsed) * 100
 
-        if request.path == b"/stats":
-            # Show percentage of elapsed time from the log that hosts are up.
-            # Example output:
-            # {"192.168.1.1": 100.0, "192.168.1.2": 0.0, "elapsed": 31.124125}
-            elapsed = 0
-            stats = {}
-            for log_entry in LOG.log:
-                if log_entry[0] is None:
-                    continue
-
-                elapsed += log_entry[0]
-                for host in log_entry[1]:
-                    if host[1]:
-                        try:
-                            stats[host[0]] += log_entry[0]
-                        except KeyError:
-                            stats[host[0]] = log_entry[0]
-                    else:
-                        try:
-                            stats[host[0]] += 0
-                        except KeyError:
-                            stats[host[0]] = 0
-
-            # Calculate percentage uptime for each host
-            for host in stats:
-                stats[host] = (stats[host] / elapsed) * 100
-
-            stats["elapsed"] = elapsed
-            return json.dumps(stats).encode("utf-8")
-
-        return b"<html><h1>Error</h1><p>invalid URI: %s</p></html>" % \
-            request.uri
-
+        stats["elapsed"] = elapsed
+        return json.dumps(stats).encode("utf-8")
+        
 
 def parse_args():
     """parse_args() - Parse CLI arguments
@@ -364,8 +358,14 @@ def main():
         LOG.add((None, []))
 
     # Set up HTTP API
-    http_api = server.Site(PingerAPI())
-    reactor.listenTCP(Settings.get("port"), http_api)
+    wwwroot = Resource()
+    wwwroot.putChild(b"", PingerAPI_help())
+    wwwroot.putChild(b"elapsed", PingerAPI_elapsed())
+    wwwroot.putChild(b"check", PingerAPI_check())
+    wwwroot.putChild(b"up", PingerAPI_up())
+    wwwroot.putChild(b"down", PingerAPI_down())
+    wwwroot.putChild(b"stats", PingerAPI_stats())
+    reactor.listenTCP(Settings.get("port"), server.Site(wwwroot))
 
     # START THE REACTOR!@#$
     reactor.callInThread(check_hosts, Settings.get("hosts"))

@@ -3,6 +3,7 @@
 """
 pinger - ping hosts. http api to query results.
 """
+
 import os
 import sys
 import json
@@ -23,6 +24,7 @@ from rollinglog.rollinglog import RollingLog
 from settings.settings import Settings
 
 
+# Lol globals.
 LOG = RollingLog(Settings.get("logsize"))
 
 
@@ -151,10 +153,18 @@ def check_hosts(ips):
     reactor.callInThread(check_hosts, ips)
 
 
-class PingerAPI_help(Resource):
+class PingerAPIHelp(Resource):
+    """PingerAPIHelp() - Display API help."""
     @staticmethod
     def render_GET(request):
-        # display help
+        """Process GET request.
+
+        Args:
+            request (twisted Request object) - Required, but not used.
+
+        Returns:
+            String containing HTML of the help menu.
+        """
         output = """\
         <html>
         <head><title>Pinger</title></head>
@@ -171,18 +181,36 @@ class PingerAPI_help(Resource):
         """
         return dedent(output).encode("utf-8")
 
-class PingerAPI_elapsed(Resource):
-    #isLeaf = True
+
+class PingerAPIElapsed(Resource):
+    """PingerAPIElapsed() - Get elapsed time of current set of data."""
     @staticmethod
     def render_GET(request):
+        """Process GET request.
+
+        Args:
+            request (twisted Request object) - required, but not used.
+
+        Returns:
+            JSON string containing "elapsed": <seconds>
+        """
         elapsed = {"elapsed": 0}
         elapsed["elapsed"] = sum(entry[0] for entry in LOG.log if entry[0])
         return json.dumps(elapsed).encode("utf-8")
 
-class PingerAPI_check(Resource):
+
+class PingerAPICheck(Resource):
+    """PingerAPICheck() - Check if a host is up/down and provide stats."""
     @staticmethod
     def render_GET(request):
-        # Show details for a host
+        """Process GET request.
+
+        Args:
+            request (twisted Request object) - Contains args, cookies, etc.
+
+        Returns:
+            JSON string containing information about the host
+        """
         check = {}
         try:
             host = request.args[b"host"]
@@ -215,28 +243,58 @@ class PingerAPI_check(Resource):
         check["elapsed"] = elapsed
         return json.dumps(check).encode("utf-8")
 
-class PingerAPI_up(Resource):
+
+class PingerAPIUp(Resource):
+    """PingerAPIUp() - Provide a list of hosts that are currently up."""
     @staticmethod
     def render_GET(request):
-        # Show current hosts responding to pings w/ latency
+        """Process GET request.
+
+        Args:
+            request (twisted Request object) - Unused, but requried.
+
+        Returns:
+            JSON object of a list of currently alive hosts and their last
+            reported latency.
+        """
         alive = {}
         for host in LOG.log[-1][1]:
             if host[1]:
                 alive[host[0]] = host[1]
         return json.dumps(alive).encode("utf-8")
 
-class PingerAPI_down(Resource):
+
+class PingerAPIDown(Resource):
+    """PingerAPIDown() - Provide a list of hosts that are currently down."""
     @staticmethod
     def render_GET(request):
+        """Process GET request
+
+        Args:
+            request (twisted Request object) - required, unused.
+
+        Returns:
+            JSON list of tracked, but down hosts.
+        """
         dead = [host[0] for host in LOG.log[-1][1] if host[1] is None]
         return json.dumps(dead).encode("utf-8")
 
-class PingerAPI_stats(Resource):
+
+class PingerAPIStats(Resource):
+    """PingerAPIStats() - Show stats of all tracked hosts."""
     @staticmethod
     def render_GET(request):
-        # Show percentage of elapsed time from the log that hosts are up.
-        # Example output:
-        # {"192.168.1.1": 100.0, "192.168.1.2": 0.0, "elapsed": 31.124125}
+        """Process GET request
+
+        Args:
+            request (twisted Request object) - required, unused.
+
+        Returns:
+            JSON string showing stats of currently tracked hosts.
+
+        Example output:
+            {"192.168.1.1": 100.0, "192.168.1.2": 0.0, "elapsed": 31.124125}
+        """
         elapsed = 0
         stats = {}
         for log_entry in LOG.log:
@@ -262,7 +320,7 @@ class PingerAPI_stats(Resource):
 
         stats["elapsed"] = elapsed
         return json.dumps(stats).encode("utf-8")
-        
+
 
 def parse_args():
     """parse_args() - Parse CLI arguments
@@ -359,12 +417,12 @@ def main():
 
     # Set up HTTP API
     wwwroot = Resource()
-    wwwroot.putChild(b"", PingerAPI_help())
-    wwwroot.putChild(b"elapsed", PingerAPI_elapsed())
-    wwwroot.putChild(b"check", PingerAPI_check())
-    wwwroot.putChild(b"up", PingerAPI_up())
-    wwwroot.putChild(b"down", PingerAPI_down())
-    wwwroot.putChild(b"stats", PingerAPI_stats())
+    wwwroot.putChild(b"", PingerAPIHelp())
+    wwwroot.putChild(b"elapsed", PingerAPIElapsed())
+    wwwroot.putChild(b"check", PingerAPICheck())
+    wwwroot.putChild(b"up", PingerAPIUp())
+    wwwroot.putChild(b"down", PingerAPIDown())
+    wwwroot.putChild(b"stats", PingerAPIStats())
     reactor.listenTCP(Settings.get("port"), server.Site(wwwroot))
 
     # START THE REACTOR!@#$

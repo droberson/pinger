@@ -155,7 +155,7 @@ def check_hosts(ips):
 
 def http_log(request):
     # TODO this
-    print(request.method, request.uri, request.path, request.args, request.requestHeaders)
+    print(request.method, request.uri, request.path, request.args, request.requestHeaders, request.getClientIP())
 
 class PingerAPIHelp(Resource):
     """PingerAPIHelp() - Display API help."""
